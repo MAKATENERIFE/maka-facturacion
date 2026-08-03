@@ -183,6 +183,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </button>
   <div id="dlzone" style="display:none;margin-top:10px"></div>
   <div class="ci" id="citext">Il contatore avanza alla generazione</div>
+  <div class="ci" id="drivestat"></div>
 </div>
 
 <div class="pp" id="ppanel">
@@ -270,6 +271,34 @@ async function syncCounter(action){
   }catch(e){
     $('syncstat').textContent='⚠ Sin conexión — numeración local (revisar antes de enviar)';
     return null;
+  }
+}
+
+function arrayBufferToBase64(buffer){
+  let binary='';
+  const bytes=new Uint8Array(buffer);
+  const chunkSize=0x8000;
+  for(let i=0;i<bytes.length;i+=chunkSize){
+    binary+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunkSize));
+  }
+  return btoa(binary);
+}
+
+async function saveToDrive(blob,filename,year){
+  const el=$('drivestat');
+  if(el)el.textContent='☁ Guardando en Drive…';
+  try{
+    const buf=await blob.arrayBuffer();
+    const b64=arrayBufferToBase64(buf);
+    const res=await fetch(COUNTER_API,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({action:'save',filename,year,pdfBase64:b64})
+    });
+    const data=await res.json();
+    if(el)el.textContent=(data&&data.ok)?'☁ Guardada en Drive ✓':'⚠ No se pudo guardar en Drive';
+  }catch(e){
+    if(el)el.textContent='⚠ No se pudo guardar en Drive';
   }
 }
 
@@ -429,6 +458,7 @@ async function genPDF(){
   const filename=`Factura_Maka_${yr}_${sq}.pdf`;
   const blob=doc.output('blob');
   const blobUrl=URL.createObjectURL(blob);
+  saveToDrive(blob,filename,yr);
 
   const dz=$('dlzone');
   dz.innerHTML=`
