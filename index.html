@@ -296,9 +296,12 @@ async function saveToDrive(blob,filename,year){
       body:JSON.stringify({action:'save',filename,year,pdfBase64:b64})
     });
     const data=await res.json();
-    if(el)el.textContent=(data&&data.ok)?'☁ Guardada en Drive ✓':'⚠ No se pudo guardar en Drive';
+    const ok=!!(data&&data.ok);
+    if(el){el.style.color=ok?'':'#f87171';el.textContent=ok?'☁ Guardada en Drive ✓':'⚠ No se pudo guardar en Drive'+(data&&data.error?': '+data.error:'');}
+    const dl=$('drivelink');
+    if(ok&&dl&&data.fileUrl)dl.innerHTML='<a href="'+data.fileUrl+'" target="_blank" rel="noopener" style="color:#fff;font-weight:700">☁ Abrir copia en Google Drive</a>';
   }catch(e){
-    if(el)el.textContent='⚠ No se pudo guardar en Drive';
+    if(el){el.style.color='#f87171';el.textContent='⚠ No se pudo guardar en Drive ('+(e&&e.message?e.message:e)+')';}
   }
 }
 
@@ -369,6 +372,20 @@ function closePDF(){
 }
 
 async function genPDF(){
+  const dz=$('dlzone'),st=$('drivestat');
+  dz.style.display='none';
+  st.style.color='';st.textContent='⏳ Generando factura…';
+  try{
+    if(!window.jspdf)throw new Error('No se cargó la librería de PDF (jsPDF). Revisa la conexión a internet y recarga la página.');
+    await genPDFInner();
+  }catch(err){
+    st.style.color='#f87171';
+    st.textContent='❌ Error al generar el PDF: '+(err&&err.message?err.message:err);
+    console.error(err);
+  }
+}
+
+async function genPDFInner(){
   if(S.numAuto){
     const confirmed=await syncCounter('next');
     if(!confirmed){
@@ -463,16 +480,18 @@ async function genPDF(){
   const dz=$('dlzone');
   dz.innerHTML=`
     <div style="background:#059669;border-radius:10px;padding:4px;text-align:center">
-      <div style="font-size:10px;color:rgba(255,255,255,.7);font-weight:600;margin-bottom:6px;padding-top:6px">PASSO 2 — CLICCA IL PULSANTE QUI SOTTO</div>
-      <a href="${blobUrl}" download="${filename}" style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:14px;background:#047857;border-radius:8px;color:#fff;font-weight:800;font-size:14px;text-decoration:none;letter-spacing:.02em">
+      <div style="font-size:10px;color:rgba(255,255,255,.85);font-weight:600;margin-bottom:6px;padding-top:6px">FACTURA ${yr}/${sq} LISTA — si no se descargó sola, usa estos botones</div>
+      <a id="dllink" href="${blobUrl}" download="${filename}" style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:14px;background:#047857;border-radius:8px;color:#fff;font-weight:800;font-size:14px;text-decoration:none;letter-spacing:.02em">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        SCARICA ${filename}
+        DESCARGAR ${filename}
       </a>
-      <div style="font-size:9px;color:rgba(255,255,255,.5);padding:6px">Il link scade tra 60 secondi</div>
+      <a href="${blobUrl}" target="_blank" rel="noopener" style="display:block;margin-top:6px;padding:10px;background:rgba(0,0,0,.2);border-radius:8px;color:#fff;font-weight:700;font-size:12px;text-decoration:none">Abrir PDF en una pestaña nueva</a>
+      <div id="drivelink" style="font-size:10px;color:rgba(255,255,255,.8);padding:8px"></div>
     </div>`;
   dz.style.display='block';
   $('citext').style.display='none';
-  setTimeout(()=>{dz.style.display='none';$('citext').style.display='block';try{URL.revokeObjectURL(blobUrl);}catch(e){}},60000);
+  try{dz.scrollIntoView({behavior:'smooth',block:'center'});}catch(e){}
+  try{$('dllink').click();}catch(e){}
 
   // Avanza contatore
   const ns=parseInt(sq)+1;const nn=`${yr}/${String(ns).padStart(3,'0')}`;
